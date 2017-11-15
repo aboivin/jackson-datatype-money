@@ -1,9 +1,14 @@
 package org.zalando.jackson.datatype.money;
 
 import com.fasterxml.jackson.core.JsonGenerator;
+import com.fasterxml.jackson.databind.JavaType;
+import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.JsonSerializer;
 import com.fasterxml.jackson.databind.SerializerProvider;
+import com.fasterxml.jackson.databind.jsonFormatVisitors.JsonFormatVisitorWrapper;
+import com.fasterxml.jackson.databind.jsonFormatVisitors.JsonObjectFormatVisitor;
 import com.fasterxml.jackson.databind.jsontype.TypeSerializer;
+import com.fasterxml.jackson.databind.ser.std.StdSerializer;
 
 import javax.annotation.Nullable;
 import javax.money.CurrencyUnit;
@@ -12,7 +17,7 @@ import javax.money.format.MonetaryAmountFormat;
 import java.io.IOException;
 import java.util.Locale;
 
-final class MonetaryAmountSerializer extends JsonSerializer<MonetaryAmount> {
+final class MonetaryAmountSerializer extends StdSerializer<MonetaryAmount> {
 
     private final FieldNames names;
     private final AmountWriter writer;
@@ -20,9 +25,24 @@ final class MonetaryAmountSerializer extends JsonSerializer<MonetaryAmount> {
 
     MonetaryAmountSerializer(final FieldNames names, final AmountWriter writer,
             final MonetaryAmountFormatFactory factory) {
+        super(MonetaryAmount.class);
         this.writer = writer;
         this.factory = factory;
         this.names = names;
+    }
+
+    @Override
+    public void acceptJsonFormatVisitor(JsonFormatVisitorWrapper visitor, JavaType typeHint) throws JsonMappingException {
+        JsonObjectFormatVisitor jsonObjectFormatVisitor = visitor.expectObjectFormat(typeHint);
+        JavaType numberType = visitor.getProvider().constructType(Number.class);
+        JavaType currencyUnitType = visitor.getProvider().constructType(CurrencyUnit.class);
+        JavaType stringType = visitor.getProvider().constructType(String.class);
+        JsonSerializer<Object> numberSerializer = visitor.getProvider().findValueSerializer(Number.class);
+        JsonSerializer<Object> currencyUnitSerializer = visitor.getProvider().findValueSerializer(CurrencyUnit.class);
+        JsonSerializer<Object> stringSerializer = visitor.getProvider().findValueSerializer(String.class);
+        jsonObjectFormatVisitor.property(names.getAmount(), numberSerializer, numberType);
+        jsonObjectFormatVisitor.property(names.getCurrency(), currencyUnitSerializer, currencyUnitType);
+        jsonObjectFormatVisitor.optionalProperty(names.getFormatted(), stringSerializer, stringType);
     }
 
     @Override
